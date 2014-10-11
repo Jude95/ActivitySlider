@@ -4,6 +4,8 @@
 
 让activity跟随手指滑动并关闭。 
 
+ ![image](https://github.com/zhuchenxi1995/ActivitySlider/raw/master/img.png)
+
 使用方法
 -
 先实例化一个ActivitySlider对象
@@ -27,7 +29,7 @@
 
 设置activity的主题为
 
-
+>
 	    <!-- transparent theme. -->
 	    <style name="TransparentTheme" parent="AppTheme">
 	       	<item name="android:windowBackground">@android:color/transparent</item>
