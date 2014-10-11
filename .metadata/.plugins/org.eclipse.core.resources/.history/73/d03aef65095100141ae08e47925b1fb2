@@ -1,0 +1,370 @@
+package com.jude.lib;
+
+import java.util.Timer;
+import java.util.TimerTask;
+
+import android.app.Activity;
+import android.util.Log;
+import android.view.MotionEvent;
+import android.view.VelocityTracker;
+import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.Interpolator;
+
+public class ActivitySlider{
+	private Activity act;
+	private View rootView;
+	private Timer timer;
+	private VelocityTracker verTracker; 
+	
+	private int duration = 500;
+	private Interpolator interpolator = new AccelerateDecelerateInterpolator();
+
+	
+	/**
+	 * 当滑动�?度超过此值得时�?关闭activity
+	 */
+	public int VELOCITY_CLOSE = 1000;
+	/**
+	 * 当滑动�?度超过此值得时�?回复activity
+	 */
+	private final static int VELOCITY_BACK= -100;
+	
+	/**
+	 * activity关闭时的动画速度与手指�?度的比例[0~1]
+	 */
+	public float VELOCITY_RATIO_ANIM= 0.5f;
+	/**
+	 * 当滑动超过屏幕多少比例的时�?关闭activity
+	 */
+	public float OFFSET_RATIO_CLOSE= 0.4f;
+	/**
+	 * 手势移动超过此范围开始进行判断，在此范围内忽�?
+	 */
+	private final static int JUDGEEDGE= 12;
+	
+	private int state;
+	private int width;
+	private int beginTouchX;
+	private int beginTouchY;
+	private float deltaX;
+	private float deltaY;
+	private int startX;
+	
+	/**
+	 * 从按下到弹起的一套动作是否有�?
+	 */
+	private boolean isActionAvailable=false;
+	/**
+	 * 状�?：空�? 滑动   按下    动画    
+	 */
+	public final static int STATE_FREE=0;
+	public final static int STATE_SLIDING=1;
+	public final static int STATE_TOUCHING=2;
+	public final static int STATE_ANIMING=3;
+
+	public ActivitySlider(Activity act){
+		this.act=act;
+		this.width=Util.getScreenWidth(act);
+		rootView=act.getWindow().getDecorView();
+		timer=new Timer();
+	}
+	
+	/**
+	 * 在Activity的dispatchTouchEvent中调用�?
+	 * @param ev
+	 * @return
+	 */
+	public boolean onTouch(MotionEvent ev){
+		switch(ev.getAction()){
+		case MotionEvent.ACTION_DOWN:
+			if(state==STATE_FREE){
+				verTracker= VelocityTracker.obtain(); 
+
+				beginTouchX=(int) ev.getRawX();
+				beginTouchY=(int) ev.getRawY();
+
+				state=STATE_TOUCHING;
+				isActionAvailable=true;
+				return false;
+			}else{
+				isActionAvailable=false;
+				return true;
+			}
+			
+		case MotionEvent.ACTION_MOVE:
+
+			if(!isActionAvailable){
+				return true;
+			}
+			verTracker.addMovement(ev);
+			deltaX=Math.abs(ev.getRawX()-beginTouchX);
+			deltaY=Math.abs(ev.getRawY()-beginTouchY);
+			//Log.i("test", "beginTouchX"+beginTouchX+"ev.getRawX()"+ev.getRawX()+"deltaX:"+deltaX
+			//		+ "beginTouchY"+beginTouchY+"ev.getRawY()"+ev.getRawY()+";deltaY"+deltaY);
+			if(ev.getRawX()-beginTouchX<0){//左移忽略
+				beginTouchX=(int) ev.getRawX();
+				return false;
+			}
+			switch(state){
+			case STATE_TOUCHING:
+				if(deltaX < JUDGEEDGE && deltaY < JUDGEEDGE){//小矩形中不处�?
+					return false;
+				}else{//首次离开小矩形，判断是横�?��还是竖着�?
+					if(deltaY/deltaX<1){//横向移动,�?��滑动activity，并锁定状�?
+						rootView.scrollTo(beginTouchX-(int) ev.getRawX(), 0);
+						state=STATE_SLIDING;
+						ev.setAction(MotionEvent.ACTION_CANCEL);//第一次横向移动，取消子view的按下状�?
+						return false;
+					}else{//纵向移动，数移放行此动作，并锁定状�?
+						state=STATE_FREE;
+						return false;
+					}
+				}
+			case STATE_SLIDING:
+				rootView.scrollTo(beginTouchX-(int) ev.getRawX(), 0);
+				return true;
+			case STATE_FREE:
+				return false;
+			}
+			break;
+			
+		case MotionEvent.ACTION_UP:
+			if(!isActionAvailable){
+				return true;
+			}
+			verTracker.computeCurrentVelocity(1000);
+			if(state==STATE_SLIDING){
+				startX=(int) (beginTouchX-ev.getRawX());
+				state=STATE_ANIMING;
+				
+				if(startX>0){//左移胡略
+					state=STATE_FREE;
+					rootView.scrollTo(0, 0);
+				}
+				if(verTracker.getXVelocity()<VELOCITY_BACK){//速度为负数，向左滑的处理
+					Log.i("MotionEvent", "向左�?);
+					AnimToBack((int)(verTracker.getXVelocity()*VELOCITY_RATIO_ANIM));
+						
+				}else if(verTracker.getXVelocity()>VELOCITY_CLOSE){//速度大于界限速度
+					Log.i("MotionEvent", "向右移，且�?�?1000");
+					if(-startX>JUDGEEDGE){
+						AnimToClose((int)(verTracker.getXVelocity()*VELOCITY_RATIO_ANIM));
+					}else{
+						AnimToBack();
+					}
+				}else {//速度[-100,界定速度]
+					Log.i("MotionEvent", "向右移，且�?�?界定速度");
+					
+					if(-startX>(width*OFFSET_RATIO_CLOSE)){//滑动位置>界定屏幕
+						Log.i("test", "位移大于屏幕");
+						AnimToClose();
+					}else{//滑动位置[0,界定屏幕]
+						Log.i("MotionEvent", "位移小于屏幕");
+						AnimToBack();
+					}
+				}
+			}else{
+				state=STATE_FREE;
+			}
+			verTracker.recycle();
+			verTracker=null;
+			break;
+		default:
+			Log.i("MotionEvent", "未识别action"+ev.getAction());
+		}
+		return false;
+	}
+	
+	private void AnimToClose(){
+		timer.schedule(new ActivitySlideTask(rootView, startX, -width, duration, interpolator, new Runnable(){
+
+			@Override
+			public void run() {	
+				act.finish();
+				timer.purge();
+			}
+
+		}),0,1); 
+	}
+	
+	private void AnimToClose(int velocity){
+		timer.schedule(new ActivitySlideTask(rootView, startX, -width, velocity, new Runnable(){
+
+			@Override
+			public void run() {	
+				act.finish();
+				timer.purge();
+			}
+
+		}),0,1); 
+	}
+	
+	private void AnimToBack(){
+		timer.schedule(new ActivitySlideTask(rootView, startX, 0, duration, interpolator, new Runnable(){
+
+			@Override
+			public void run() {	
+				timer.purge();
+				state=STATE_FREE;
+			}
+
+		}),0,1); 
+	}
+	
+	private void AnimToBack(int velocity){
+		timer.schedule(new ActivitySlideTask(rootView, startX, 0,velocity, new Runnable(){
+
+			@Override
+			public void run() {	
+				timer.purge();
+				state=STATE_FREE;
+			}
+
+		}),0,1); 
+	}
+	
+	 /**
+	  * 在需要关闭的时�?调用，activity将滑动关�?
+	  */
+	public void onClose(){
+		if(state==STATE_FREE){
+			state=STATE_SLIDING;
+			if(timer==null){
+			}
+			timer.schedule(new ActivitySlideTask(rootView, 0, -width, duration, interpolator, new Runnable(){
+
+				@Override
+				public void run() {	
+					act.finish();
+					timer.purge();
+					state=STATE_FREE;
+				}
+		    	 
+		     }),0,1);
+		}
+	}
+	
+	/**
+	 * 获取状�?
+	 * @return
+	 */
+	public int getState() {
+		return state;
+	}
+	/**
+	 * 获取动画持续时间
+	 */
+	public int getDuration() {
+		return duration;
+	}
+	
+	/**
+	 * 设置动画持续时间，默�?000ms
+	 */
+	public void setDuration(int duration) {
+		this.duration = duration==0?1000:duration;
+	}
+	
+	/**
+	 * 设置速度选择器，默认�??移动
+	 * @return
+	 */
+	public void setInterpolator(Interpolator interpolator) {
+		this.interpolator = interpolator;
+	}
+
+}
+
+/**
+ * 动画线程
+ * @author	朱晨�?
+ * @time 2014�?�?�?下午12:27:51
+ * @function
+ */
+class ActivitySlideTask extends TimerTask {
+	/**
+	 * 被移动的主视�?
+	 */
+	private View rootView;
+	/**
+	 * 起始时间
+	 */
+	private long starTtime;
+	
+	/**
+	 * 运动时间
+	 */
+	private int duration;
+	
+	/**
+	 * 起始位置
+	 */
+	private int startX;
+	
+	/**
+	 * 结束位置
+	 */
+	private int endX;
+	
+	/**
+	 * 结束后运行的Runnable
+	 */
+	private Runnable endRunnable;
+	
+	/**
+	 * 即时的进度[0~1]
+	 */
+	private float normalizedTime;
+	
+	/**
+	 * 运动速度插�?�?
+	 */
+	private Interpolator interpolator;
+	
+	/**
+	 * 即时的位�?
+	 */
+	private int mPosX;
+	
+	public ActivitySlideTask(View rootView,int startX,int endX,int duration,Interpolator interpolator,Runnable endRunnable){
+		this.rootView=rootView;
+		this.starTtime=System.currentTimeMillis();
+		this.startX=startX;
+		this.endX=endX;
+		this.duration=duration;
+		this.endRunnable=endRunnable;
+		this.interpolator=interpolator;
+	}
+	
+	public ActivitySlideTask(View rootView,int startX,int endX,int velocity,Runnable endRunnable){
+		this.rootView=rootView;
+		this.starTtime=System.currentTimeMillis();
+		this.startX=startX;
+		this.endX=endX;
+		this.endRunnable=endRunnable;
+		this.interpolator=null;
+		this.duration=Math.abs((endX-startX)*1000/velocity);
+		this.duration=this.duration>600?600:this.duration;
+	}
+	/**
+	 * 周期1毫秒循环执行此Runnable。将rootView的位置一点一点移�?
+	 */
+	@Override
+	public void run() {
+		normalizedTime=(float)(System.currentTimeMillis()-starTtime)/duration;
+		if(normalizedTime>=1){
+			Log.i("test", endX+"");
+			rootView.scrollTo(endX, 0);
+			if(endRunnable!=null){
+    		 endRunnable.run();
+			}
+    		this.cancel();
+    	 }else{
+    	        if(interpolator==null)mPosX = (int) (startX + ((endX - startX ) * normalizedTime));
+    	        else mPosX = (int) (startX + ((endX - startX ) * interpolator.getInterpolation(normalizedTime)));
+    	        rootView.scrollTo(mPosX, 0);
+    	 } 
+	}
+
+}

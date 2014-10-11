@@ -1,0 +1,63 @@
+package com.example.activitysliderexample;
+
+import com.jude.lib.ActivitySlider;
+
+import android.support.v7.app.ActionBarActivity;
+import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.MotionEvent;
+
+
+public class MainActivity extends ActionBarActivity {
+	private ActivitySlider actSlider;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+        if (id == R.id.action_settings) {
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+    
+    /**
+     * 设置是否可以滑动关闭
+     * @param isSlidable
+     */
+    protected void setSlidable(boolean isSlidable){
+    	if(android.os.Build.VERSION.SDK_INT >= 16){
+        	if(isSlidable){
+        		actSlider=new ActivitySlider(this);
+        	}else{
+        		actSlider=null;
+        	}
+    	}
+    }
+    
+	@Override
+	public boolean dispatchTouchEvent(MotionEvent ev) {
+		if(actSlider==null||!actSlider.onTouch(ev)){
+			return super.dispatchTouchEvent(ev);
+		}else{
+			return true;
+		}	
+	}
+}
